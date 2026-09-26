@@ -344,20 +344,22 @@ class Component extends DCLogic {
     const cv = this.canvasRef.current; if (!cv) return;
     const dpr = Math.min(2, window.devicePixelRatio || 1), W = Math.round(cv.clientWidth * dpr), H = Math.round(cv.clientHeight * dpr);
     if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; force = true; }
-    const p = this.pos || 0, f = this.nearestReady(Math.min(this.frames.length - 1, Math.round(this.framePos(p)))), img = this.frames[f];
+    const p = this.pos || 0, fp = Math.min(this.frames.length - 1, this.framePos(p)), f0 = Math.floor(fp), bt = fp - f0;
+    const f = this.nearestReady(f0), img = this.frames[f], nx = this.frames[Math.min(this.frames.length - 1, f0 + 1)];
+    const nxOk = nx && nx !== img && nx.complete && nx.naturalWidth && f === f0;
     const ki = Math.round(p), still = this.KEYS[ki], stillOk = still && still.complete && still.naturalWidth;
     const frameOk = img && img.complete && img.naturalWidth;
     if (!frameOk && !stillOk) return;
     // until video frames arrive, hold the nearest keyframe still — no loading screen
     const dist = Math.abs(p - ki) * (this.PER - 1), a = !frameOk ? 1 : stillOk ? Math.max(0, 1 - dist / 4) : 0;
     if (cv.style.opacity !== '1') cv.style.opacity = '1';
-    const sig = (frameOk ? f : 'k' + ki) + ':' + a.toFixed(2);
+    const sig = (frameOk ? f : 'k' + ki) + ':' + a.toFixed(2) + ':' + (nxOk ? bt.toFixed(2) : '0');
     if (!force && sig === this.lastSig) return;
     this.lastSig = sig;
     const ctx = cv.getContext('2d'); ctx.imageSmoothingQuality = 'high';
     const cover = im => { const s = Math.max(W / im.naturalWidth, H / im.naturalHeight), w = im.naturalWidth * s, hh = im.naturalHeight * s; ctx.drawImage(im, (W - w) / 2, (H - hh) / 2, w, hh); };
     ctx.globalAlpha = 1;
-    if (a < 1) cover(img);
+    if (a < 1) { cover(img); if (nxOk && bt > 0.01) { ctx.globalAlpha = bt; cover(nx); ctx.globalAlpha = 1; } } // blend neighbouring frames by sub-frame scroll position → no visible frame steps
     if (a > 0) { ctx.globalAlpha = a; cover(still); ctx.globalAlpha = 1; }
   }
   update() {
